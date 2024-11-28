@@ -66,7 +66,7 @@ use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use session_key::generate_session_key;
 use surrealdb::{
-    engine::remote::ws::Client, sql::{Id, Thing}, Surreal
+    engine::remote::ws::Client, Surreal
 };
 
 use crate::dates::add_duration_to_current;
@@ -119,7 +119,6 @@ pub(crate) type SessionState = HashMap<String, String>;
 /// Database record for the session tokens
 #[derive(Debug, Serialize, Deserialize)]
 pub(crate) struct KeyRecord {
-    id: Thing,
     token: String,
     expiry: surrealdb::sql::Datetime,
 }
@@ -133,10 +132,11 @@ pub(crate) struct KeyRecordPatch {
 impl SessionStore for SurrealSessionStore {
     async fn load(&self, session_key: &SessionKey) -> Result<Option<SessionState>, LoadError> {
         debug!("Loading sessionstate from db..");
-        let thingy = Thing {
+        /* let thingy = Thing {
             tb: self.tb.clone(),
             id: Id::String(session_key.as_ref().to_owned()),
-        };
+        }; */
+        let thingy = (self.tb.clone(), session_key.as_ref().to_owned());
 
         let res: Result<Option<KeyRecord>, surrealdb::Error> = self.client.select(thingy.clone()).await;
 
@@ -158,7 +158,7 @@ impl SessionStore for SurrealSessionStore {
             return Ok(None);
         }
 
-        Ok(serde_json::from_str(&record.token).map_err(Into::into).map_err(LoadError::Deserialization)?)
+        serde_json::from_str(&record.token).map_err(Into::into).map_err(LoadError::Deserialization)
     }
 
     async fn save(&self, session_state: SessionState, ttl: &Duration) -> Result<SessionKey, SaveError> {
@@ -173,14 +173,10 @@ impl SessionStore for SurrealSessionStore {
             }
         };
 
-        let res: Result<Vec<KeyRecord>, surrealdb::Error> = self
+        let res: Result<Option<Vec<KeyRecord>>, surrealdb::Error> = self
             .client
-            .create(self.tb.clone())
+            .create((self.tb.clone(), id))
             .content(KeyRecord {
-                id: Thing {
-                    tb: self.tb.clone(),
-                    id: Id::String(id),
-                },
                 token: body,
                 expiry: expiry_time.into(),
             })
@@ -188,6 +184,10 @@ impl SessionStore for SurrealSessionStore {
 
         if res.is_err() {
             return Err(SaveError::Other(anyhow!("Failed to create database record!")));
+        }
+
+        if res.unwrap().is_none() {
+            return Err(SaveError::Other(anyhow!("Failed to create database recored! (I think)")));
         }
 
         Ok(session_key)
@@ -199,10 +199,7 @@ impl SessionStore for SurrealSessionStore {
         let body = serde_json::to_string(&session_state).map_err(Into::into).map_err(UpdateError::Serialization)?;
 
         let id = session_key.as_ref().to_owned();
-        let thingy = Thing {
-            tb: self.tb.clone(),
-            id: Id::String(id),
-        };
+        let thingy = (self.tb.clone(), id);
 
         let expiry_time: DateTime<Utc> = match add_duration_to_current(ttl) {
             Some(a) => a,
@@ -227,10 +224,7 @@ impl SessionStore for SurrealSessionStore {
 
     async fn update_ttl(&self, session_key: &SessionKey, ttl: &Duration) -> Result<(), Error> {
         let id = session_key.as_ref().to_owned();
-        let thingy = Thing {
-            tb: self.tb.clone(),
-            id: Id::String(id),
-        };
+        let thingy = (self.tb.clone(), id);
 
         if ttl.is_zero() || ttl.is_negative() {
             let _: Option<KeyRecord> = self.client.delete(thingy).await.map_err(|_| anyhow!("Failed to delete database record"))?;
@@ -256,19 +250,16 @@ impl SessionStore for SurrealSessionStore {
     async fn delete(&self, session_key: &SessionKey) -> Result<(), Error> {
         debug!("Deleting session from DB");
         let id = session_key.as_ref().to_owned();
-        let thingy = Thing {
-            tb: self.tb.clone(),
-            id: Id::String(id),
-        };
+        let thingy = (self.tb.clone(), id);
 
         let res = self.client.delete::<Option<KeyRecord>>(thingy).await.map_err(|_| anyhow!("Failed to delete database record"));
         if res.is_ok() {
             debug!("Deleting from DB worked");
-            return Ok(());
+            Ok(())
         } else {
             let err = res.unwrap_err();
             debug!("Error deleting from DB: {:?}", err);
-            return Err(err);
+            Err(err)
         }
     }
 }

@@ -63,7 +63,6 @@ use actix_web::cookie::time::Duration;
 use anyhow::{anyhow, Error};
 use chrono::{DateTime, Utc};
 use log::{debug, error};
-use serde::{Deserialize, Serialize};
 use session_key::generate_session_key;
 use surrealdb::{
     Surreal, engine::remote::ws::Client, types::SurrealValue

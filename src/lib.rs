@@ -66,7 +66,7 @@ use log::{debug, error};
 use serde::{Deserialize, Serialize};
 use session_key::generate_session_key;
 use surrealdb::{
-    engine::remote::ws::Client, Surreal
+    Surreal, engine::remote::ws::Client, types::SurrealValue
 };
 
 use crate::dates::add_duration_to_current;
@@ -117,16 +117,16 @@ impl SurrealSessionStore {
 pub(crate) type SessionState = HashMap<String, String>;
 
 /// Database record for the session tokens
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, SurrealValue)]
 pub(crate) struct KeyRecord {
     token: String,
-    expiry: surrealdb::sql::Datetime,
+    expiry: surrealdb::types::Datetime,
 }
 
-#[derive(Debug, Serialize, Deserialize)]
+#[derive(Debug, SurrealValue)]
 pub(crate) struct KeyRecordPatch {
     token: Option<String>,
-    expiry: Option<surrealdb::sql::Datetime>,
+    expiry: Option<surrealdb::types::Datetime>,
 }
 
 impl SessionStore for SurrealSessionStore {

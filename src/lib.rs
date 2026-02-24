@@ -158,7 +158,13 @@ impl SessionStore for SurrealSessionStore {
             return Ok(None);
         }
 
-        serde_json::from_str(&record.token).map_err(Into::into).map_err(LoadError::Deserialization)
+        serde_json::from_str(&record.token)
+            .map_err(|e| {
+                error!("Deserialization failed: {e:?} \n token was: {}", &record.token);
+                e
+            })
+            .map_err(Into::into)
+            .map_err(LoadError::Deserialization)
     }
 
     async fn save(&self, session_state: SessionState, ttl: &Duration) -> Result<SessionKey, SaveError> {
@@ -185,6 +191,8 @@ impl SessionStore for SurrealSessionStore {
         if res.is_err() {
             return Err(SaveError::Other(anyhow!("Failed to create database record!")));
         }
+
+        error!("Save result: {res:?}"); // add this
 
         if res.unwrap().is_none() {
             return Err(SaveError::Other(anyhow!("Failed to create database recored! (I think)")));

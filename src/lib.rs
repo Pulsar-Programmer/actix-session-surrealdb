@@ -63,6 +63,7 @@ use actix_web::cookie::time::Duration;
 use anyhow::{anyhow, Error};
 use chrono::{DateTime, Utc};
 use log::{debug, error};
+use serde::{Deserialize, Serialize};
 use session_key::generate_session_key;
 use surrealdb::{
     Surreal, engine::remote::ws::Client, types::SurrealValue
@@ -116,13 +117,13 @@ impl SurrealSessionStore {
 pub(crate) type SessionState = HashMap<String, String>;
 
 /// Database record for the session tokens
-#[derive(Debug, SurrealValue)]
+#[derive(Debug, Serialize, Deserialize, SurrealValue)]
 pub(crate) struct KeyRecord {
     token: String,
     expiry: surrealdb::types::Datetime,
 }
 
-#[derive(Debug, SurrealValue)]
+#[derive(Debug, Serialize, Deserialize, SurrealValue)]
 pub(crate) struct KeyRecordPatch {
     token: Option<String>,
     expiry: Option<surrealdb::types::Datetime>,
@@ -157,7 +158,13 @@ impl SessionStore for SurrealSessionStore {
             return Ok(None);
         }
 
-        serde_json::from_str(&record.token).map_err(Into::into).map_err(LoadError::Deserialization)
+        serde_json::from_str(&record.token)
+            .map_err(|e| {
+                error!("Deserialization failed: {e:?} \n token was: {}", &record.token);
+                e
+            })
+            .map_err(Into::into)
+            .map_err(LoadError::Deserialization)
     }
 
     async fn save(&self, session_state: SessionState, ttl: &Duration) -> Result<SessionKey, SaveError> {
@@ -172,7 +179,7 @@ impl SessionStore for SurrealSessionStore {
             }
         };
 
-        let res: Result<Option<Vec<KeyRecord>>, surrealdb::Error> = self
+        let res: Result<Option<KeyRecord>, surrealdb::Error> = self
             .client
             .create((self.tb.clone(), id))
             .content(KeyRecord {
@@ -181,15 +188,13 @@ impl SessionStore for SurrealSessionStore {
             })
             .await;
 
-        if res.is_err() {
-            return Err(SaveError::Other(anyhow!("Failed to create database record!")));
-        }
+        // eprintln!("SURREAL SESSION SAVE RESULT: {res:?}");
 
-        if res.unwrap().is_none() {
-            return Err(SaveError::Other(anyhow!("Failed to create database recored! (I think)")));
+        match res {
+            Err(e) => return Err(SaveError::Other(anyhow!("Failed to create database record: {e}"))),
+            Ok(None) => return Err(SaveError::Other(anyhow!("Create returned None!"))),
+            Ok(Some(_)) => return Ok(session_key),
         }
-
-        Ok(session_key)
     }
 
     async fn update(

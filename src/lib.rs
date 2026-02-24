@@ -188,7 +188,7 @@ impl SessionStore for SurrealSessionStore {
             })
             .await;
 
-        eprintln!("SURREAL SESSION SAVE RESULT: {res:?}");
+        // eprintln!("SURREAL SESSION SAVE RESULT: {res:?}");
 
         match res {
             Err(e) => return Err(SaveError::Other(anyhow!("Failed to create database record: {e}"))),
@@ -218,7 +218,7 @@ impl SessionStore for SurrealSessionStore {
         };
 
         let res: Result<Option<KeyRecord>, surrealdb::Error> = self.client.update(thingy).merge(updated).await;
-        println!("Update skibidi!!!");
+
         if res.is_err() {
             Err(UpdateError::Other(anyhow!("Failed to update database record!")))
         } else {

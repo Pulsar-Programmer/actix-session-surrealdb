@@ -63,6 +63,7 @@ use actix_web::cookie::time::Duration;
 use anyhow::{anyhow, Error};
 use chrono::{DateTime, Utc};
 use log::{debug, error};
+use serde::{Deserialize, Serialize};
 use session_key::generate_session_key;
 use surrealdb::{
     Surreal, engine::remote::ws::Client, types::SurrealValue
@@ -116,13 +117,13 @@ impl SurrealSessionStore {
 pub(crate) type SessionState = HashMap<String, String>;
 
 /// Database record for the session tokens
-#[derive(Debug, SurrealValue)]
+#[derive(Debug, Serialize, Deserialize, SurrealValue)]
 pub(crate) struct KeyRecord {
     token: String,
     expiry: surrealdb::types::Datetime,
 }
 
-#[derive(Debug, SurrealValue)]
+#[derive(Debug, Serialize, Deserialize, SurrealValue)]
 pub(crate) struct KeyRecordPatch {
     token: Option<String>,
     expiry: Option<surrealdb::types::Datetime>,

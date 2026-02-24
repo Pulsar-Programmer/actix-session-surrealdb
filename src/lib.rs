@@ -179,7 +179,7 @@ impl SessionStore for SurrealSessionStore {
             }
         };
 
-        let res: Result<Option<Vec<KeyRecord>>, surrealdb::Error> = self
+        let res: Result<Option<KeyRecord>, surrealdb::Error> = self
             .client
             .create((self.tb.clone(), id))
             .content(KeyRecord {
@@ -188,19 +188,13 @@ impl SessionStore for SurrealSessionStore {
             })
             .await;
 
-        if res.is_err() {
-            return Err(SaveError::Other(anyhow!("Failed to create database record!")));
-        }
-
-        error!("Save result: {res:?}"); // add this
         eprintln!("SURREAL SESSION SAVE RESULT: {res:?}");
-        println!("Surreal session save result: {res:?}");
 
-        if res.unwrap().is_none() {
-            return Err(SaveError::Other(anyhow!("Failed to create database recored! (I think)")));
+        match res {
+            Err(e) => return Err(SaveError::Other(anyhow!("Failed to create database record: {e}"))),
+            Ok(None) => return Err(SaveError::Other(anyhow!("Create returned None!"))),
+            Ok(Some(_)) => return Ok(session_key),
         }
-
-        Ok(session_key)
     }
 
     async fn update(
